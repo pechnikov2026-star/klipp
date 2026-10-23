@@ -1,4 +1,4 @@
-"""Klipp – Clip-Bibliothek (GTK4 + libadwaita)."""
+"""Klipp clip library (GTK4 + libadwaita)."""
 import math
 import subprocess
 import sys
@@ -51,16 +51,16 @@ def fmt_when(ts: float) -> str:
     d = datetime.fromtimestamp(ts)
     days = (datetime.now().date() - d.date()).days
     if days == 0:
-        return f"Heute, {d:%H:%M}"
+        return f"Today, {d:%H:%M}"
     if days == 1:
-        return f"Gestern, {d:%H:%M}"
+        return f"Yesterday, {d:%H:%M}"
     if days < 7:
-        return ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][d.weekday()] + f", {d:%H:%M}"
-    return f"{d:%d.%m.%Y}"
+        return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][d.weekday()] + f", {d:%H:%M}"
+    return f"{d:%b %d, %Y}"
 
 
 def run_bg(fn, done=None, error=None):
-    """fn im Thread ausführen, Ergebnis im GTK-Thread zurückgeben."""
+    """Run fn in a thread and hand the result back on the GTK thread."""
     def worker():
         try:
             res = fn()
@@ -73,10 +73,10 @@ def run_bg(fn, done=None, error=None):
     threading.Thread(target=worker, daemon=True).start()
 
 
-def ask_name(parent, heading: str, on_ok, initial: str = "", action: str = "Erstellen"):
+def ask_name(parent, heading: str, on_ok, initial: str = "", action: str = "Create"):
     entry = Gtk.Entry(text=initial, activates_default=True, placeholder_text="Name")
     dlg = Adw.AlertDialog(heading=heading, extra_child=entry)
-    dlg.add_response("cancel", "Abbrechen")
+    dlg.add_response("cancel", "Cancel")
     dlg.add_response("ok", action)
     dlg.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
     dlg.set_default_response("ok")
@@ -92,7 +92,7 @@ def ask_name(parent, heading: str, on_ok, initial: str = "", action: str = "Erst
 
 def popup_at(popover: Gtk.Popover, widget: Gtk.Widget, x: float | None = None,
              y: float | None = None):
-    """Popover an ein Widget hängen und beim Schliessen wieder lösen."""
+    """Attach a popover to a widget and detach it again when it closes."""
     popover.set_parent(widget)
     popover.set_has_arrow(x is None)
     if x is not None:
@@ -104,19 +104,19 @@ def popup_at(popover: Gtk.Popover, widget: Gtk.Widget, x: float | None = None,
 
 
 class FolderPopover(Gtk.Popover):
-    """Ordner-Auswahl für einen Clip (Häkchen = drin), optional mit Clip-Aktionen."""
+    """Folder picker for a clip (checked = inside), optionally with clip actions."""
 
     def __init__(self, win: "KlippWindow", clip: library.Clip, actions: bool = False):
         super().__init__()
         self.win, self.clip = win, clip
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin_top=6,
                       margin_bottom=6, margin_start=6, margin_end=6, width_request=220)
-        title = Gtk.Label(label="In Ordner", xalign=0, margin_start=6, margin_bottom=4)
+        title = Gtk.Label(label="Add to folder", xalign=0, margin_start=6, margin_bottom=4)
         title.add_css_class("heading")
         box.append(title)
         folders = library.list_folders()
         if not folders:
-            hint = Gtk.Label(label="Noch keine Ordner", xalign=0, margin_start=6)
+            hint = Gtk.Label(label="No folders yet", xalign=0, margin_start=6)
             hint.add_css_class("dim-label")
             box.append(hint)
         for name in folders:
@@ -124,7 +124,7 @@ class FolderPopover(Gtk.Popover):
             check.connect("toggled", self._toggled, name)
             box.append(check)
         new = Gtk.Button()
-        new.set_child(Adw.ButtonContent(icon_name="list-add-symbolic", label="Neuer Ordner …",
+        new.set_child(Adw.ButtonContent(icon_name="list-add-symbolic", label="New folder …",
                                         halign=Gtk.Align.START))
         new.add_css_class("flat")
         new.connect("clicked", self._new)
@@ -132,11 +132,11 @@ class FolderPopover(Gtk.Popover):
         if actions:
             box.append(Gtk.Separator(margin_top=4, margin_bottom=4))
             for icon, label, cb in (
-                    ("media-playback-start-symbolic", "Abspielen", lambda: win.open_clip(clip)),
+                    ("media-playback-start-symbolic", "Play", lambda: win.open_clip(clip)),
                     ("starred-symbolic" if not clip.favorite else "non-starred-symbolic",
-                     "Zu Favoriten" if not clip.favorite else "Aus Favoriten", self._fav),
-                    ("edit-copy-symbolic", "Datei kopieren", self._copy),
-                    ("user-trash-symbolic", "In den Papierkorb", lambda: win.confirm_trash(clip))):
+                     "Add to favorites" if not clip.favorite else "Remove from favorites", self._fav),
+                    ("edit-copy-symbolic", "Copy file", self._copy),
+                    ("user-trash-symbolic", "Move to trash", lambda: win.confirm_trash(clip))):
                 b = Gtk.Button()
                 b.set_child(Adw.ButtonContent(icon_name=icon, label=label, halign=Gtk.Align.START))
                 b.add_css_class("flat")
@@ -159,8 +159,8 @@ class FolderPopover(Gtk.Popover):
                 return
             library.set_in_folder(self.clip, name, True)
             self.win.refresh_meta()
-            self.win.toast(f"„{self.clip.title}“ liegt jetzt in „{name}“")
-        ask_name(self.win, "Neuer Ordner", create)
+            self.win.toast(f"\"{self.clip.title}\" is now in \"{name}\"")
+        ask_name(self.win, "New folder", create)
 
     def _fav(self):
         library.set_favorite(self.clip, not self.clip.favorite)
@@ -168,10 +168,10 @@ class FolderPopover(Gtk.Popover):
 
     def _copy(self):
         if library.copy_files_to_clipboard([self.clip.path]):
-            self.win.toast("Datei kopiert")
+            self.win.toast("File copied")
 
 
-# ====================================================================== Trim-Leiste
+# ====================================================================== Trim bar
 
 class TrimBar(Gtk.DrawingArea):
     PAD = 12
@@ -252,14 +252,14 @@ class TrimBar(Gtk.DrawingArea):
         if not ok:
             acc = Adw.StyleManager.get_default().get_accent_color_rgba()
         pad, top, bh = self.PAD, 8, h - 16
-        # Spur
+        # track
         cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.12)
         self._rounded(cr, pad, top, w - 2 * pad, bh, 8)
         cr.fill()
         if not self.duration:
             return
         xs, xe = self._x(self.start), self._x(self.end)
-        # Auswahl
+        # selection
         cr.set_source_rgba(acc.red, acc.green, acc.blue, 0.30)
         cr.rectangle(xs, top, xe - xs, bh)
         cr.fill()
@@ -267,7 +267,7 @@ class TrimBar(Gtk.DrawingArea):
         cr.set_line_width(2)
         cr.rectangle(xs, top + 1, xe - xs, bh - 2)
         cr.stroke()
-        # Griffe
+        # handles
         for x in (xs, xe):
             self._rounded(cr, x - self.HANDLE_W / 2, top - 4, self.HANDLE_W, bh + 8, 4)
             cr.fill()
@@ -275,7 +275,7 @@ class TrimBar(Gtk.DrawingArea):
             cr.rectangle(x - 1, top + bh / 2 - 6, 2, 12)
             cr.fill()
             cr.set_source_rgba(acc.red, acc.green, acc.blue, 1)
-        # Abspielposition
+        # playhead
         xp = self._x(self.pos)
         cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.95)
         cr.rectangle(xp - 1, 2, 2, h - 4)
@@ -291,7 +291,7 @@ class TrimBar(Gtk.DrawingArea):
         cr.close_path()
 
 
-# ====================================================================== Clip-Karte
+# ====================================================================== Clip card
 
 class ClipCard(Gtk.Button):
     def __init__(self, clip: library.Clip, on_open, on_menu=None):
@@ -371,27 +371,27 @@ class PlayerPage(Adw.NavigationPage):
 
         self.fav = Gtk.ToggleButton(icon_name="starred-symbolic" if clip.favorite else
                                     "non-starred-symbolic", active=clip.favorite,
-                                    tooltip_text="Favorit")
+                                    tooltip_text="Favorite")
         self.fav.connect("toggled", self._toggle_fav)
 
         menu = Gio.Menu()
-        menu.append("Umbenennen …", "clip.rename")
-        menu.append("Im Ordner zeigen", "clip.folder")
-        menu.append("Datei kopieren", "clip.copy")
+        menu.append("Rename …", "clip.rename")
+        menu.append("Show in folder", "clip.folder")
+        menu.append("Copy file", "clip.copy")
         section = Gio.Menu()
-        section.append("In den Papierkorb", "clip.delete")
+        section.append("Move to trash", "clip.delete")
         menu.append_section(None, section)
         more = Gtk.MenuButton(icon_name="view-more-symbolic", menu_model=menu,
-                              tooltip_text="Mehr")
+                              tooltip_text="More")
 
-        self.discord_btn = Gtk.Button(tooltip_text=f"Auf {Config.load().discord_limit_mb} MB "
-                                                   "komprimieren und kopieren")
-        content = Adw.ButtonContent(icon_name="send-to-symbolic", label="Für Discord")
+        self.discord_btn = Gtk.Button(tooltip_text=f"Compress to {Config.load().discord_limit_mb} MB "
+                                                   "and copy")
+        content = Adw.ButtonContent(icon_name="send-to-symbolic", label="For Discord")
         self.discord_btn.set_child(content)
         self.discord_btn.add_css_class("suggested-action")
         self.discord_btn.connect("clicked", self._discord)
 
-        folder_btn = Gtk.MenuButton(icon_name="folder-symbolic", tooltip_text="In Ordner legen")
+        folder_btn = Gtk.MenuButton(icon_name="folder-symbolic", tooltip_text="Add to folder")
         folder_btn.set_create_popup_func(
             lambda mb: mb.set_popover(FolderPopover(self.win, self.clip)))
 
@@ -427,17 +427,17 @@ class PlayerPage(Adw.NavigationPage):
         self.range_label = Gtk.Label(xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.END)
         self.range_label.add_css_class("numeric")
         row.append(self.range_label)
-        for label, cb, tip in (("[", self._mark_start, "Anfang an Abspielposition"),
-                               ("]", self._mark_end, "Ende an Abspielposition")):
+        for label, cb, tip in (("[", self._mark_start, "Set start to playhead"),
+                               ("]", self._mark_end, "Set end to playhead")):
             b = Gtk.Button(label=label, tooltip_text=tip)
             b.add_css_class("flat")
             b.connect("clicked", cb)
             row.append(b)
-        self.reset_btn = Gtk.Button(label="Zurücksetzen", sensitive=False)
+        self.reset_btn = Gtk.Button(label="Reset", sensitive=False)
         self.reset_btn.add_css_class("flat")
         self.reset_btn.connect("clicked", self._reset)
         row.append(self.reset_btn)
-        self.save_trim = Gtk.Button(label="Schnitt speichern", sensitive=False)
+        self.save_trim = Gtk.Button(label="Save cut", sensitive=False)
         self.save_trim.add_css_class("pill")
         self.save_trim.connect("clicked", self._do_trim)
         row.append(self.save_trim)
@@ -457,7 +457,7 @@ class PlayerPage(Adw.NavigationPage):
         keys.connect("key-pressed", self._key)
         self.add_controller(keys)
 
-    # -- Wiedergabe
+    # -- playback
     def _on_duration(self, *_):
         d = self.media.get_duration() / 1e6
         if d > 0:
@@ -478,7 +478,7 @@ class PlayerPage(Adw.NavigationPage):
     def _on_error(self, *_):
         err = self.media.get_error()
         if err:
-            self.win.toast(f"Wiedergabe fehlgeschlagen: {err.message}")
+            self.win.toast(f"Playback failed: {err.message}")
 
     def _on_hidden(self, *_):
         self.media.pause()
@@ -498,20 +498,20 @@ class PlayerPage(Adw.NavigationPage):
             return True
         return False
 
-    # -- Schnitt
+    # -- trimming
     def _range_changed(self, s, e):
         self._update_label()
 
     def _update_label(self):
         t = self.trim
         if not t.duration:
-            self.range_label.set_label("Lädt …")
+            self.range_label.set_label("Loading …")
             return
         length = t.end - t.start
         if t.is_trimmed:
-            self.range_label.set_label(f"{fmt_time(t.start)} – {fmt_time(t.end)}  ·  {length:.1f} s")
+            self.range_label.set_label(f"{fmt_time(t.start)} - {fmt_time(t.end)}  ·  {length:.1f} s")
         else:
-            self.range_label.set_label(f"Ganzer Clip  ·  {length:.1f} s  —  Griffe ziehen zum Zuschneiden")
+            self.range_label.set_label(f"Whole clip  ·  {length:.1f} s  ·  drag the handles to trim")
         self.reset_btn.set_sensitive(t.is_trimmed)
         self.save_trim.set_sensitive(t.is_trimmed and not self._busy)
         if t.is_trimmed:
@@ -544,19 +544,19 @@ class PlayerPage(Adw.NavigationPage):
     def _do_trim(self, *_):
         s, e = self.trim.start, self.trim.end
         self._set_busy(True)
-        self.win.toast("Schnitt wird gespeichert …", timeout=2)
+        self.win.toast("Saving cut …", timeout=2)
 
         def done(path):
             self._set_busy(False)
             self.win.reload()
-            self.win.toast(f"Gespeichert: {path.name}", action=("Öffnen", lambda: self.win.open_path(path)))
+            self.win.toast(f"Saved: {path.name}", action=("Open", lambda: self.win.open_path(path)))
 
         def fail(e):
             self._set_busy(False)
-            self.win.toast(f"Schnitt fehlgeschlagen: {e}")
+            self.win.toast(f"Trim failed: {e}")
         run_bg(lambda: library.trim(self.clip, s, e), done, fail)
 
-    # -- Aktionen
+    # -- actions
     def _discord(self, *_):
         cfg = Config.load()
         s = self.trim.start if self.trim.is_trimmed else None
@@ -564,19 +564,19 @@ class PlayerPage(Adw.NavigationPage):
         self._set_busy(True)
         spinner = Adw.Spinner()
         self.discord_btn.set_child(spinner)
-        self.win.toast(f"Komprimiere auf {cfg.discord_limit_mb} MB …", timeout=2)
+        self.win.toast(f"Compressing to {cfg.discord_limit_mb} MB …", timeout=2)
 
         def restore():
             self.discord_btn.set_child(Adw.ButtonContent(icon_name="send-to-symbolic",
-                                                         label="Für Discord"))
+                                                         label="For Discord"))
             self._set_busy(False)
 
         def done(path):
             restore()
             library.copy_files_to_clipboard([path])
             mb = path.stat().st_size / 1024 / 1024
-            self.win.toast(f"Kopiert ({mb:.1f} MB) – in Discord mit Strg+V einfügen",
-                           action=("Ordner", lambda: library.open_folder(path)))
+            self.win.toast(f"Copied ({mb:.1f} MB). Paste it into Discord with Ctrl+V",
+                           action=("Folder", lambda: library.open_folder(path)))
 
         def fail(err):
             restore()
@@ -590,16 +590,16 @@ class PlayerPage(Adw.NavigationPage):
 
     def _copy(self, *_):
         if library.copy_files_to_clipboard([self.clip.path]):
-            self.win.toast("Datei kopiert – in Discord oder im Dateimanager einfügen")
+            self.win.toast("File copied. Paste it into Discord or your file manager")
 
     def _folder(self, *_):
         library.open_folder(self.clip.path)
 
     def _rename(self, *_):
         entry = Gtk.Entry(text=self.clip.title, activates_default=True)
-        dlg = Adw.AlertDialog(heading="Clip umbenennen", extra_child=entry)
-        dlg.add_response("cancel", "Abbrechen")
-        dlg.add_response("ok", "Umbenennen")
+        dlg = Adw.AlertDialog(heading="Rename clip", extra_child=entry)
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("ok", "Rename")
         dlg.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
         dlg.set_default_response("ok")
 
@@ -612,7 +612,7 @@ class PlayerPage(Adw.NavigationPage):
                 try:
                     library.rename(self.clip, name)
                 except OSError as e:
-                    self.win.toast(f"Umbenennen fehlgeschlagen: {e}")
+                    self.win.toast(f"Rename failed: {e}")
                     return
                 self.media = Gtk.MediaFile.new_for_filename(str(self.clip.path))
                 for sig, cb in (("notify::duration", self._on_duration),
@@ -630,10 +630,10 @@ class PlayerPage(Adw.NavigationPage):
         dlg.present(self.win)
 
     def _delete(self, *_):
-        dlg = Adw.AlertDialog(heading="Clip löschen?",
-                              body=f"„{self.clip.title}“ wird in den Papierkorb verschoben.")
-        dlg.add_response("cancel", "Abbrechen")
-        dlg.add_response("delete", "Löschen")
+        dlg = Adw.AlertDialog(heading="Delete clip?",
+                              body=f"\"{self.clip.title}\" will be moved to the trash.")
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("delete", "Delete")
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
 
         def resp(d, r):
@@ -643,38 +643,37 @@ class PlayerPage(Adw.NavigationPage):
             try:
                 library.trash(self.clip)
             except Exception as e:  # noqa: BLE001
-                self.win.toast(f"Löschen fehlgeschlagen: {e}")
+                self.win.toast(f"Delete failed: {e}")
                 return
             self.win.nav.pop()
             self.win.reload()
-            self.win.toast("In den Papierkorb verschoben")
+            self.win.toast("Moved to trash")
         dlg.connect("response", resp)
         dlg.present(self.win)
 
 
-# ====================================================================== Einstellungen
+# ====================================================================== Settings
 
 class Preferences(Adw.PreferencesDialog):
     FPS = [30, 60, 120, 144, 165, 200, 240]
-    QUALITY = [("medium", "Mittel"), ("high", "Hoch"), ("very_high", "Sehr hoch"),
+    QUALITY = [("medium", "Medium"), ("high", "High"), ("very_high", "Very high"),
                ("ultra", "Ultra")]
-    CODEC = [("h264", "H.264 – läuft überall, auch in Discord"),
-             ("hevc", "HEVC – kleinere Dateien"), ("av1", "AV1 – am kleinsten")]
-    LIMITS = [(10, "10 MB (ohne Nitro)"), (50, "50 MB (Nitro Basic)"), (500, "500 MB (Nitro)")]
+    CODEC = [("h264", "H.264"), ("hevc", "HEVC"), ("av1", "AV1")]
+    LIMITS = [(10, "10 MB (no Nitro)"), (50, "50 MB (Nitro Basic)"), (500, "500 MB (Nitro)")]
 
     def __init__(self, win: "KlippWindow"):
-        super().__init__(title="Einstellungen", search_enabled=False)
+        super().__init__(title="Settings", search_enabled=False)
         self.win = win
         self.cfg = Config.load()
         self.before = self.cfg.recorder_signature()
 
-        page = Adw.PreferencesPage(title="Allgemein", icon_name="emblem-system-symbolic")
+        page = Adw.PreferencesPage(title="General", icon_name="emblem-system-symbolic")
         self.add(page)
 
         keys = Adw.PreferencesGroup(title="Hotkey")
         page.add(keys)
-        self.hotkey_row = Adw.ActionRow(title="Clip speichern", activatable=True)
-        self.hotkey_label = Adw.ShortcutLabel(disabled_text="Kein Hotkey", valign=Gtk.Align.CENTER)
+        self.hotkey_row = Adw.ActionRow(title="Save clip", activatable=True)
+        self.hotkey_label = Adw.ShortcutLabel(disabled_text="No hotkey", valign=Gtk.Align.CENTER)
         self.hotkey_row.add_suffix(self.hotkey_label)
         self.hotkey_row.add_suffix(Gtk.Image(icon_name="document-edit-symbolic"))
         self.hotkey_row.connect("activated", self._capture_hotkey)
@@ -682,76 +681,76 @@ class Preferences(Adw.PreferencesDialog):
         self._show_hotkey()
 
         rec = Adw.PreferencesGroup(title="Instant Replay",
-                                   description="Klipp nimmt im Hintergrund auf und speichert "
-                                               "auf Tastendruck die letzten Sekunden.")
+                                   description="Klipp records in the background and saves "
+                                               "the last few seconds when you press the hotkey.")
         page.add(rec)
         self.seconds = Adw.SpinRow.new_with_range(5, 600, 5)
-        self.seconds.set_title("Clip-Länge")
-        self.seconds.set_subtitle("Sekunden, die beim Speichern zurückgeholt werden")
+        self.seconds.set_title("Clip length")
+        self.seconds.set_subtitle("Seconds kept when you save")
         self.seconds.set_value(self.cfg.clip_seconds)
         rec.add(self.seconds)
 
-        self.autostart = Adw.SwitchRow(title="Beim Login starten",
-                                       subtitle="Instant Replay läuft automatisch nach dem Hochfahren")
+        self.autostart = Adw.SwitchRow(title="Start at login",
+                                       subtitle="Instant replay starts automatically when you log in")
         if _has_service():
             self.autostart.set_active(_service_enabled())
             self.autostart.connect("notify::active", self._toggle_autostart)
         else:
             self.autostart.set_sensitive(False)
-            self.autostart.set_subtitle("Erst mit install.sh installieren")
+            self.autostart.set_subtitle("Install with install.sh first")
         rec.add(self.autostart)
 
-        self.fps = self._combo("Bildrate", [f"{f} FPS" for f in self.FPS],
+        self.fps = self._combo("Frame rate", [f"{f} FPS" for f in self.FPS],
                                self.FPS.index(self.cfg.fps) if self.cfg.fps in self.FPS else 1)
         rec.add(self.fps)
         q_keys = [k for k, _ in self.QUALITY]
-        self.quality = self._combo("Qualität", [v for _, v in self.QUALITY],
+        self.quality = self._combo("Quality", [v for _, v in self.QUALITY],
                                    q_keys.index(self.cfg.quality) if self.cfg.quality in q_keys else 2)
         rec.add(self.quality)
         c_keys = [k for k, _ in self.CODEC]
-        self.codec = self._combo("Codec", [v.split(" –")[0] for _, v in self.CODEC],
+        self.codec = self._combo("Codec", [v for _, v in self.CODEC],
                                  c_keys.index(self.cfg.codec) if self.cfg.codec in c_keys else 0)
-        self.codec.set_subtitle("H.264 empfohlen – läuft überall, auch in Discord")
+        self.codec.set_subtitle("H.264 recommended: plays everywhere, Discord included")
         rec.add(self.codec)
 
         self.monitors = ["auto"] + self._list_monitors()
-        labels = ["Automatisch (Hauptmonitor)"] + self.monitors[1:]
-        self.monitor = self._combo("Bildschirm", labels,
+        labels = ["Automatic (main monitor)"] + self.monitors[1:]
+        self.monitor = self._combo("Monitor", labels,
                                    self.monitors.index(self.cfg.monitor)
                                    if self.cfg.monitor in self.monitors else 0)
         rec.add(self.monitor)
 
-        audio = Adw.PreferencesGroup(title="Ton")
+        audio = Adw.PreferencesGroup(title="Audio")
         page.add(audio)
-        self.desktop_audio = Adw.SwitchRow(title="Spiel- und Desktop-Ton",
+        self.desktop_audio = Adw.SwitchRow(title="Game and desktop audio",
                                            active=self.cfg.desktop_audio)
-        self.microphone = Adw.SwitchRow(title="Mikrofon", subtitle="Deine Stimme mit aufnehmen",
+        self.microphone = Adw.SwitchRow(title="Microphone", subtitle="Record your voice too",
                                         active=self.cfg.microphone)
-        self.cursor = Adw.SwitchRow(title="Mauszeiger aufnehmen", active=self.cfg.cursor)
+        self.cursor = Adw.SwitchRow(title="Record mouse cursor", active=self.cfg.cursor)
         audio.add(self.desktop_audio)
         audio.add(self.microphone)
         audio.add(self.cursor)
 
-        lib = Adw.PreferencesGroup(title="Bibliothek")
+        lib = Adw.PreferencesGroup(title="Library")
         page.add(lib)
-        self.folder_row = Adw.ActionRow(title="Speicherort", subtitle=self.cfg.library)
+        self.folder_row = Adw.ActionRow(title="Location", subtitle=self.cfg.library)
         btn = Gtk.Button(icon_name="folder-open-symbolic", valign=Gtk.Align.CENTER,
-                         tooltip_text="Ordner wählen")
+                         tooltip_text="Choose folder")
         btn.add_css_class("flat")
         btn.connect("clicked", self._pick_folder)
         self.folder_row.add_suffix(btn)
         self.folder_row.set_activatable_widget(btn)
         lib.add(self.folder_row)
-        self.limit = self._combo("Discord-Limit", [v for _, v in self.LIMITS],
+        self.limit = self._combo("Discord limit", [v for _, v in self.LIMITS],
                                  [k for k, _ in self.LIMITS].index(self.cfg.discord_limit_mb)
                                  if self.cfg.discord_limit_mb in [k for k, _ in self.LIMITS] else 0)
         lib.add(self.limit)
 
-        info = Adw.PreferencesGroup(title="Benachrichtigung")
+        info = Adw.PreferencesGroup(title="Notifications")
         page.add(info)
-        self.notif = Adw.SwitchRow(title="Benachrichtigung beim Speichern",
+        self.notif = Adw.SwitchRow(title="Notify when a clip is saved",
                                    active=self.cfg.notifications)
-        self.sound = Adw.SwitchRow(title="Auslöser-Ton", active=self.cfg.sound)
+        self.sound = Adw.SwitchRow(title="Shutter sound", active=self.cfg.sound)
         info.add(self.notif)
         info.add(self.sound)
 
@@ -762,13 +761,13 @@ class Preferences(Adw.PreferencesDialog):
         r = subprocess.run(["systemctl", "--user", action, "klipp.service"],
                            capture_output=True, text=True, timeout=10)
         if r.returncode != 0:
-            self.add_toast(Adw.Toast(title=f"Autostart: {r.stderr.strip() or 'fehlgeschlagen'}"))
+            self.add_toast(Adw.Toast(title=f"Autostart: {r.stderr.strip() or 'failed'}"))
             row.set_active(_service_enabled())
         else:
-            self.add_toast(Adw.Toast(title="Startet ab jetzt beim Login" if row.get_active()
-                                     else "Startet nicht mehr automatisch"))
+            self.add_toast(Adw.Toast(title="Starts at login from now on" if row.get_active()
+                                     else "No longer starts automatically"))
 
-    # -- Hotkey
+    # -- hotkey
     GTK_MODS = {"SUPER": "<Super>", "CTRL": "<Control>", "ALT": "<Alt>", "SHIFT": "<Shift>"}
     BARE_OK = {f"F{i}" for i in range(1, 25)} | {"Print", "Pause", "Scroll_Lock", "Insert"}
 
@@ -782,24 +781,24 @@ class Preferences(Adw.PreferencesDialog):
         st = recorder.read_state()
         mode = st.get("hotkey_mode")
         if not p:
-            sub = "Aus – nur über den Knopf in der App"
+            sub = "Off: use the button in the app"
         elif not st.get("daemon_pid"):
-            sub = "Aktiv, sobald Instant Replay läuft"
+            sub = "Active as soon as instant replay runs"
         elif mode == "hyprland":
-            sub = "Aktiv – funktioniert überall, auch im Vollbild-Spiel"
+            sub = "Active: works everywhere, fullscreen games included"
         elif mode == "evdev":
-            sub = "Aktiv – direkt über die Tastatur"
+            sub = "Active: read directly from the keyboard"
         else:
-            sub = st.get("hotkey_error") or "Wird gesetzt …"
-        self.hotkey_row.set_subtitle(sub + "  ·  klicken zum Ändern")
+            sub = st.get("hotkey_error") or "Setting up …"
+        self.hotkey_row.set_subtitle(sub + "  ·  click to change")
 
     def _capture_hotkey(self, *_):
         old = self.cfg.hotkey
-        hotkey.hypr_unbind(old)  # damit die alte Kombi beim Drücken hier ankommt
-        dlg = Adw.AlertDialog(heading="Neuen Hotkey drücken",
-                              body="Zum Beispiel Alt + F10.\n"
-                                   "Esc = abbrechen · Rücktaste = Hotkey entfernen")
-        dlg.add_response("cancel", "Abbrechen")
+        hotkey.hypr_unbind(old)  # so the old combination reaches this dialog when pressed
+        dlg = Adw.AlertDialog(heading="Press the new hotkey",
+                              body="For example Alt + F10.\n"
+                                   "Esc = cancel · Backspace = remove hotkey")
+        dlg.add_response("cancel", "Cancel")
         dlg.set_close_response("cancel")
         result = {"combo": None}
 
@@ -820,14 +819,14 @@ class Preferences(Adw.PreferencesDialog):
                                       ("ALT", Gdk.ModifierType.ALT_MASK),
                                       ("SHIFT", Gdk.ModifierType.SHIFT_MASK)) if state & mask]
             if not mods and name not in self.BARE_OK:
-                dlg.set_body("Bitte mit Strg, Alt oder Super kombinieren – sonst löst es beim "
-                             "Tippen aus.\nEsc = abbrechen")
+                dlg.set_body("Combine it with Ctrl, Alt or Super, otherwise it fires while "
+                             "you type.\nEsc = cancel")
                 return True
             combo = "+".join(mods + [name])
             clash = hotkey.hypr_conflict(combo)
             if clash:
-                dlg.set_body(f"{hotkey.pretty(combo)} ist schon belegt ({clash}).\n"
-                             "Bitte eine andere Kombination drücken.")
+                dlg.set_body(f"{hotkey.pretty(combo)} is already taken ({clash}).\n"
+                             "Press a different combination.")
                 return True
             result["combo"] = combo
             dlg.close()
@@ -844,7 +843,7 @@ class Preferences(Adw.PreferencesDialog):
                 saved = Config.load()
                 saved.hotkey = combo
                 saved.save()
-                self._show_hotkey("Gespeichert – wird in ein paar Sekunden aktiv")
+                self._show_hotkey("Saved. Active in a few seconds")
                 GLib.timeout_add_seconds(4, lambda: (self._show_hotkey(), False)[1])
                 self.win.refresh_status()
             else:
@@ -868,7 +867,7 @@ class Preferences(Adw.PreferencesDialog):
             return []
 
     def _pick_folder(self, *_):
-        dlg = Gtk.FileDialog(title="Speicherort für Clips")
+        dlg = Gtk.FileDialog(title="Clip location")
         dlg.set_initial_folder(Gio.File.new_for_path(str(Config.load().library_path)))
 
         def done(d, res):
@@ -899,12 +898,12 @@ class Preferences(Adw.PreferencesDialog):
         c.save()
         if c.recorder_signature() != self.before or c.library != old_library:
             if recorder.reload_daemon():
-                self.win.toast("Instant Replay mit neuen Einstellungen neu gestartet")
+                self.win.toast("Instant replay restarted with the new settings")
         self.win.reload()
         self.win.refresh_status()
 
 
-# ====================================================================== Fenster
+# ====================================================================== Window
 
 class KlippWindow(Adw.ApplicationWindow):
     def __init__(self, app):
@@ -939,16 +938,16 @@ class KlippWindow(Adw.ApplicationWindow):
                                        action=Gtk.CallbackAction.new(self._focus_search)))
         self.add_controller(keys)
 
-    # -- Aufbau
+    # -- layout
     def _build_sidebar(self):
         view = Adw.ToolbarView()
         header = Adw.HeaderBar()
         menu = Gio.Menu()
-        menu.append("Einstellungen", "win.prefs")
-        menu.append("Clip-Ordner öffnen", "win.folder")
-        menu.append("Über Klipp", "win.about")
+        menu.append("Settings", "win.prefs")
+        menu.append("Open clip folder", "win.folder")
+        menu.append("About Klipp", "win.about")
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
-                                       primary=True, tooltip_text="Menü"))
+                                       primary=True, tooltip_text="Menu"))
         view.add_top_bar(header)
         for name, cb in (("prefs", lambda *_: Preferences(self).present(self)),
                          ("folder", lambda *_: library.open_folder(self._library_root())),
@@ -987,7 +986,7 @@ class KlippWindow(Adw.ApplicationWindow):
         status.append(row)
         self.save_btn = Gtk.Button()
         self.save_btn.set_child(Adw.ButtonContent(icon_name="media-record-symbolic",
-                                                  label="Clip speichern"))
+                                                  label="Save clip"))
         self.save_btn.add_css_class("pill")
         self.save_btn.add_css_class("suggested-action")
         self.save_btn.add_css_class("save-button")
@@ -1001,19 +1000,19 @@ class KlippWindow(Adw.ApplicationWindow):
         self.nav = Adw.NavigationView()
         page_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        self.search = Gtk.SearchEntry(placeholder_text="Clips durchsuchen", width_chars=26)
+        self.search = Gtk.SearchEntry(placeholder_text="Search clips", width_chars=26)
         self.search.connect("search-changed", lambda *_: self._apply_filter())
         header.set_title_widget(self.search)
         fmenu = Gio.Menu()
-        fmenu.append("Ordner umbenennen …", "win.folder-rename")
-        fmenu.append("Ordner löschen", "win.folder-delete")
+        fmenu.append("Rename folder …", "win.folder-rename")
+        fmenu.append("Delete folder", "win.folder-delete")
         self.folder_menu = Gtk.MenuButton(icon_name="view-more-symbolic", menu_model=fmenu,
-                                          tooltip_text="Ordner", visible=False)
+                                          tooltip_text="Folder", visible=False)
         header.pack_end(self.folder_menu)
         page_view.add_top_bar(header)
 
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
-        self.empty = Adw.StatusPage(icon_name="camera-video-symbolic", title="Noch keine Clips",
+        self.empty = Adw.StatusPage(icon_name="camera-video-symbolic", title="No clips yet",
                                     description=self._empty_text())
         self.stack.add_named(self.empty, "empty")
 
@@ -1042,10 +1041,10 @@ class KlippWindow(Adw.ApplicationWindow):
         secs = Config.load().clip_seconds
         if st.get("running"):
             key = hotkey.pretty(Config.load().hotkey)
-            return f"Drück im Spiel {key}, um die letzten {secs} Sekunden zu speichern."
-        return "Schalte unten links Instant Replay ein – dann speichert dein Hotkey die letzten Sekunden."
+            return f"Press {key} in a game to save the last {secs} seconds."
+        return "Turn on instant replay at the bottom left, then your hotkey saves the last few seconds."
 
-    # -- Daten
+    # -- data
     def _library_root(self) -> Path:
         root = Config.load().library_path
         root.mkdir(parents=True, exist_ok=True)
@@ -1098,7 +1097,7 @@ class KlippWindow(Adw.ApplicationWindow):
         return row
 
     def _sidebar_header(self, row, before):
-        group = {"folder": "Ordner", "new-folder": "Ordner", "game": "Spiele"}
+        group = {"folder": "Folders", "new-folder": "Folders", "game": "Games"}
         mine = group.get(row.key[0])
         prev = group.get(before.key[0]) if before else None
         row.set_header(self._section(mine) if mine and mine != prev else None)
@@ -1117,15 +1116,15 @@ class KlippWindow(Adw.ApplicationWindow):
         games: dict[str, int] = {}
         for c in clips:
             games[c.game] = games.get(c.game, 0) + 1
-        rows = [self._sidebar_row(("all", None), "Alle Clips", "view-grid-symbolic", len(clips)),
-                self._sidebar_row(("fav", None), "Favoriten", "starred-symbolic",
+        rows = [self._sidebar_row(("all", None), "All clips", "view-grid-symbolic", len(clips)),
+                self._sidebar_row(("fav", None), "Favorites", "starred-symbolic",
                                   sum(1 for c in clips if c.favorite))]
         folder_rows = [self._sidebar_row(("folder", f), f, "folder-symbolic",
                                          sum(1 for c in clips if f in c.folders))
                        for f in library.list_folders()]
         for r in folder_rows:
             self._make_folder_row(r)
-        new_row = self._sidebar_row(("new-folder", None), "Neuer Ordner", "list-add-symbolic",
+        new_row = self._sidebar_row(("new-folder", None), "New folder", "list-add-symbolic",
                                     dim=True)
         game_rows = [self._sidebar_row(("game", g), g, "input-gaming-symbolic", n)
                      for g, n in sorted(games.items(), key=lambda kv: kv[0].lower())]
@@ -1152,8 +1151,8 @@ class KlippWindow(Adw.ApplicationWindow):
             self.sidebar.select_row(row)
             self._on_sidebar(self.sidebar, row)
             m = Gio.Menu()
-            m.append("Umbenennen …", "win.folder-rename")
-            m.append("Ordner löschen", "win.folder-delete")
+            m.append("Rename …", "win.folder-rename")
+            m.append("Delete folder", "win.folder-delete")
             popup_at(Gtk.PopoverMenu.new_from_model(m), row, x, y)
         click.connect("pressed", menu)
         row.add_controller(click)
@@ -1167,11 +1166,11 @@ class KlippWindow(Adw.ApplicationWindow):
                 added += 1
         if added:
             self.refresh_meta()
-            self.toast(f"{added} Clip{'s' if added > 1 else ''} in „{folder}“ gelegt")
+            self.toast(f"Added {added} clip{'s' if added > 1 else ''} to \"{folder}\"")
         return True
 
     def refresh_meta(self):
-        """Seitenleiste + Filter nach Änderungen an Ordnern (ohne Karten neu zu bauen)."""
+        """Sidebar and filter after folder changes (without rebuilding the cards)."""
         self._rebuild_sidebar([c.clip for c in self.cards])
         self._apply_filter()
 
@@ -1179,10 +1178,10 @@ class KlippWindow(Adw.ApplicationWindow):
         popup_at(FolderPopover(self, card.clip, actions=True), card, x, y)
 
     def confirm_trash(self, clip: library.Clip):
-        dlg = Adw.AlertDialog(heading="Clip löschen?",
-                              body=f"„{clip.title}“ wird in den Papierkorb verschoben.")
-        dlg.add_response("cancel", "Abbrechen")
-        dlg.add_response("delete", "Löschen")
+        dlg = Adw.AlertDialog(heading="Delete clip?",
+                              body=f"\"{clip.title}\" will be moved to the trash.")
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("delete", "Delete")
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
 
         def resp(d, r):
@@ -1191,10 +1190,10 @@ class KlippWindow(Adw.ApplicationWindow):
             try:
                 library.trash(clip)
             except Exception as e:  # noqa: BLE001
-                self.toast(f"Löschen fehlgeschlagen: {e}")
+                self.toast(f"Delete failed: {e}")
                 return
             self.reload()
-            self.toast("In den Papierkorb verschoben")
+            self.toast("Moved to trash")
         dlg.connect("response", resp)
         dlg.present(self)
 
@@ -1207,7 +1206,7 @@ class KlippWindow(Adw.ApplicationWindow):
                 return
             self.filter = ("folder", name)
             self.refresh_meta()
-        ask_name(self, "Neuer Ordner", create)
+        ask_name(self, "New folder", create)
 
     def _rename_folder(self, *_):
         kind, old = self.filter
@@ -1224,16 +1223,16 @@ class KlippWindow(Adw.ApplicationWindow):
                 c.clip.folders = [new if f == old else f for f in c.clip.folders]
             self.filter = ("folder", new)
             self.refresh_meta()
-        ask_name(self, "Ordner umbenennen", done, initial=old, action="Umbenennen")
+        ask_name(self, "Rename folder", done, initial=old, action="Rename")
 
     def _delete_folder(self, *_):
         kind, name = self.filter
         if kind != "folder":
             return
-        dlg = Adw.AlertDialog(heading=f"„{name}“ löschen?",
-                              body="Nur der Ordner wird gelöscht – die Clips bleiben erhalten.")
-        dlg.add_response("cancel", "Abbrechen")
-        dlg.add_response("delete", "Ordner löschen")
+        dlg = Adw.AlertDialog(heading=f"Delete \"{name}\"?",
+                              body="Only the folder is deleted. The clips are kept.")
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("delete", "Delete folder")
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
 
         def resp(d, r):
@@ -1266,7 +1265,7 @@ class KlippWindow(Adw.ApplicationWindow):
     def _apply_filter(self):
         self.flow.invalidate_filter()
         kind, value = self.filter
-        title = {"all": "Alle Clips", "fav": "Favoriten"}.get(kind, value)
+        title = {"all": "All clips", "fav": "Favorites"}.get(kind, value)
         visible = sum(1 for c in self.cards if self._filter_card_clip(c.clip))
         self.heading.set_label(title)
         self.library_page.set_title(title)
@@ -1275,16 +1274,16 @@ class KlippWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name("grid")
         else:
             if kind == "folder" and not self.search.get_text():
-                self.empty.set_title("Ordner ist leer")
-                self.empty.set_description("Rechtsklick auf einen Clip und Häkchen bei diesem Ordner "
-                                           "setzen – oder den Clip hierher in die Seitenleiste ziehen.")
+                self.empty.set_title("Folder is empty")
+                self.empty.set_description("Right-click a clip and check this folder, "
+                                           "or drag the clip onto it in the sidebar.")
                 self.empty.set_icon_name("folder-symbolic")
             elif self.cards:
-                self.empty.set_title("Nichts gefunden" if self.search.get_text() else "Keine Clips hier")
+                self.empty.set_title("Nothing found" if self.search.get_text() else "No clips here")
                 self.empty.set_description(None)
                 self.empty.set_icon_name("edit-find-symbolic")
             else:
-                self.empty.set_title("Noch keine Clips")
+                self.empty.set_title("No clips yet")
                 self.empty.set_description(self._empty_text())
                 self.empty.set_icon_name("camera-video-symbolic")
             self.stack.set_visible_child_name("empty")
@@ -1315,7 +1314,7 @@ class KlippWindow(Adw.ApplicationWindow):
 
     def _deferred_reload(self):
         self._reload_pending = False
-        # Nur neu laden, wenn sich die Dateimenge geändert hat (Favoriten etc. setzt die GUI selbst)
+        # Only reload when the set of files changed (the GUI sets favorites etc. itself)
         current = {str(c.clip.path) for c in self.cards}
         fresh = {str(c.path) for c in library.scan(Config.load())}
         if current != fresh:
@@ -1325,7 +1324,7 @@ class KlippWindow(Adw.ApplicationWindow):
     # -- Navigation
     def open_clip(self, clip: library.Clip):
         if not clip.path.exists():
-            self.toast("Datei nicht mehr vorhanden")
+            self.toast("File no longer exists")
             self.reload()
             return
         if self.nav.get_visible_page() is not self.library_page:
@@ -1350,7 +1349,7 @@ class KlippWindow(Adw.ApplicationWindow):
         self.search.grab_focus()
         return True
 
-    # -- Status / Recorder
+    # -- status / recorder
     def refresh_status(self):
         st = recorder.read_state()
         running = bool(st.get("running"))
@@ -1364,13 +1363,13 @@ class KlippWindow(Adw.ApplicationWindow):
             self.status_dot.remove_css_class(c)
         self.status_dot.add_css_class("rec-dot" if running else "idle-dot")
         if running:
-            self.status_sub.set_label(f"Läuft · letzte {st.get('seconds')} s · {st.get('fps')} FPS")
-            self.status_sub.set_tooltip_text(f"Bildschirm {st.get('monitor')}")
+            self.status_sub.set_label(f"Running · last {st.get('seconds')} s · {st.get('fps')} FPS")
+            self.status_sub.set_tooltip_text(f"Monitor {st.get('monitor')}")
         elif st.get("error"):
             self.status_sub.set_label(st["error"])
             self.status_sub.set_tooltip_text(st["error"])
         else:
-            self.status_sub.set_label("Aus")
+            self.status_sub.set_label("Off")
             self.status_sub.set_tooltip_text(None)
 
     def _poll(self):
@@ -1402,8 +1401,8 @@ class KlippWindow(Adw.ApplicationWindow):
             self._service_busy = False
             self.refresh_status()
             if bool(recorder.read_state().get("running")) != state and state:
-                err = recorder.read_state().get("error") or "Start fehlgeschlagen"
-                self.toast(f"Instant Replay: {err}")
+                err = recorder.read_state().get("error") or "Start failed"
+                self.toast(f"Instant replay: {err}")
             self._apply_filter()
         run_bg(work, done, lambda e: (done(None), self.toast(str(e))))
         sw.set_state(state)
@@ -1415,14 +1414,14 @@ class KlippWindow(Adw.ApplicationWindow):
         def done(path):
             self.save_btn.set_sensitive(True)
             self.reload()
-            self.toast("Clip gespeichert", action=("Ansehen", lambda: self.open_path(path)))
+            self.toast("Clip saved", action=("View", lambda: self.open_path(path)))
 
         def fail(e):
             self.save_btn.set_sensitive(True)
             self.toast(str(e))
         run_bg(lambda: recorder.save_clip(notify=False), done, fail)
 
-    # -- Sonstiges
+    # -- misc
     def toast(self, text: str, timeout: int = 4, action=None):
         t = Adw.Toast(title=GLib.markup_escape_text(text), timeout=timeout)
         if action:
@@ -1434,8 +1433,8 @@ class KlippWindow(Adw.ApplicationWindow):
     def _about(self, *_):
         Adw.AboutDialog(application_name="Klipp", application_icon=APP_ID, version=__version__,
                         developer_name="Andrin & Claude",
-                        comments="Instant-Replay-Clips für Linux – wie Medal, "
-                                 "auf Basis von GPU Screen Recorder.",
+                        comments="Instant-replay clips for Linux, like Medal, "
+                                 "built on GPU Screen Recorder.",
                         license_type=Gtk.License.MIT_X11).present(self)
 
 

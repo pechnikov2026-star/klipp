@@ -1,4 +1,4 @@
-"""Clip-Bibliothek: Dateien, Metadaten, Thumbnails, Spielerkennung, Export."""
+"""Clip library: files, metadata, thumbnails, game detection, export."""
 import fcntl
 import hashlib
 import json
@@ -16,7 +16,7 @@ from .config import DATA_DIR, INDEX_FILE, THUMB_DIR, Config
 
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm"}
 
-# Fenster, die kein Spiel sind – Clips davon landen unter "Desktop"
+# Windows that are not games; their clips go to "Desktop"
 NON_GAMES = {
     "kitty", "alacritty", "foot", "wezterm", "org.wezfurlong.wezterm", "firefox",
     "vivaldi-stable", "chromium", "google-chrome", "brave-browser", "discord",
@@ -85,9 +85,9 @@ def drop_entry(path: Path) -> None:
         index.pop(str(path), None)
 
 
-# ---------------------------------------------------------------- Eigene Ordner
-# Virtuelle Ordner wie Alben: die Datei bleibt im Spielordner, ein Clip kann in
-# mehreren Ordnern liegen. Die Liste steht unter FOLDERS_KEY im Index.
+# ---------------------------------------------------------------- User folders
+# Virtual folders like albums: the file stays in its game folder, and a clip can
+# be in several folders. The list is stored under FOLDERS_KEY in the index.
 
 FOLDERS_KEY = "__folders__"
 
@@ -99,11 +99,11 @@ def list_folders() -> list[str]:
 def create_folder(name: str) -> str:
     name = name.strip()[:60]
     if not name:
-        raise ValueError("Name fehlt")
+        raise ValueError("Name missing")
     with _locked_index() as index:
         folders = index.setdefault(FOLDERS_KEY, [])
         if any(f.lower() == name.lower() for f in folders):
-            raise ValueError(f"„{name}“ gibt es schon")
+            raise ValueError(f"\"{name}\" already exists")
         folders.append(name)
     return name
 
@@ -111,11 +111,11 @@ def create_folder(name: str) -> str:
 def rename_folder(old: str, new: str) -> str:
     new = new.strip()[:60]
     if not new:
-        raise ValueError("Name fehlt")
+        raise ValueError("Name missing")
     with _locked_index() as index:
         folders = index.setdefault(FOLDERS_KEY, [])
         if any(f.lower() == new.lower() and f != old for f in folders):
-            raise ValueError(f"„{new}“ gibt es schon")
+            raise ValueError(f"\"{new}\" already exists")
         index[FOLDERS_KEY] = [new if f == old else f for f in folders]
         for key, meta in index.items():
             if key != FOLDERS_KEY and old in (meta.get("folders") or []):
@@ -124,7 +124,7 @@ def rename_folder(old: str, new: str) -> str:
 
 
 def delete_folder(name: str) -> None:
-    """Ordner entfernen – die Clips bleiben erhalten."""
+    """Remove a folder; the clips are kept."""
     with _locked_index() as index:
         index[FOLDERS_KEY] = [f for f in index.get(FOLDERS_KEY, []) if f != name]
         for key, meta in index.items():
@@ -161,7 +161,7 @@ def scan(cfg: Config) -> list[Clip]:
     return clips
 
 
-# ---------------------------------------------------------------- Medien-Helfer
+# ---------------------------------------------------------------- Media helpers
 
 def probe_duration(path: Path) -> float | None:
     try:
@@ -210,7 +210,7 @@ def has_encoder(name: str) -> bool:
 
 
 def _encoder_args(bitrate_k: int | None = None, hw: bool = True) -> list[str]:
-    """H.264 per NVENC wenn möglich, sonst x264."""
+    """H.264 via NVENC when possible, otherwise x264."""
     if hw and has_encoder("h264_nvenc"):
         if bitrate_k:
             return ["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "cbr",
@@ -249,7 +249,7 @@ def safe_name(text: str) -> str:
     return text[:80] or "Clip"
 
 
-# ---------------------------------------------------------------- Spielerkennung
+# ---------------------------------------------------------------- Game detection
 
 def _steam_roots() -> list[Path]:
     home = Path.home()
@@ -286,7 +286,7 @@ def steam_game_name(appid: str) -> str | None:
 
 
 def _proc_steam_appid(pid: int) -> str | None:
-    """Steam setzt SteamAppId in der Umgebung jedes gestarteten Spiels."""
+    """Steam sets SteamAppId in the environment of every game it launches."""
     try:
         env = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
     except OSError:
@@ -326,10 +326,10 @@ def detect_game(win: dict | None = None) -> str:
     return safe_name(pretty.title() if pretty.islower() else pretty) if pretty else "Desktop"
 
 
-# ---------------------------------------------------------------- Operationen
+# ---------------------------------------------------------------- Operations
 
 def ingest(raw: Path, game: str, cfg: Config) -> Path:
-    """Frisch gespeicherten Replay in den Spielordner verschieben und registrieren."""
+    """Move a freshly saved replay into its game folder and register it."""
     folder = cfg.library_path / safe_name(game)
     folder.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
@@ -361,15 +361,15 @@ def trash(clip: Clip) -> None:
 
 
 def trim(clip: Clip, start: float, end: float) -> Path:
-    """Bildgenau zuschneiden (neu kodiert), Original bleibt erhalten."""
-    dest = _unique(clip.path.with_name(f"{clip.path.stem} (Schnitt){clip.path.suffix}"))
+    """Frame-accurate trim (re-encoded); the original is kept."""
+    dest = _unique(clip.path.with_name(f"{clip.path.stem} (cut){clip.path.suffix}"))
     cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
            "-i", str(clip.path), "ENC", "-c:a", "aac", "-b:a", "192k",
            "-movflags", "+faststart", str(dest)]
     r = _encode(cmd)
     if r.returncode != 0:
         dest.unlink(missing_ok=True)
-        raise RuntimeError(r.stderr.strip()[-400:] or "ffmpeg fehlgeschlagen")
+        raise RuntimeError(r.stderr.strip()[-400:] or "ffmpeg failed")
     duration = probe_duration(dest)
     update_entry(dest, game=clip.game, created=time.time(), duration=duration,
                  folders=list(clip.folders))
@@ -379,14 +379,14 @@ def trim(clip: Clip, start: float, end: float) -> Path:
 
 def export_discord(clip: Clip, cfg: Config, start: float | None = None,
                    end: float | None = None) -> Path:
-    """Auf das Discord-Upload-Limit komprimieren."""
+    """Compress to the Discord upload limit."""
     duration = clip.duration or probe_duration(clip.path) or 30
     start = start or 0.0
     end = end if end is not None else duration
     length = max(0.5, end - start)
     whole = start <= 0.05 and end >= duration - 0.05
     if whole and clip.path.stat().st_size <= cfg.discord_limit_mb * 1024 * 1024 * 0.97:
-        return clip.path  # passt schon – Original verschicken
+        return clip.path  # already fits, send the original
     out_dir = cfg.library_path / ".discord"
     out_dir.mkdir(parents=True, exist_ok=True)
     dest = out_dir / f"{safe_name(clip.title)}.mp4"
@@ -396,7 +396,7 @@ def export_discord(clip: Clip, cfg: Config, start: float | None = None,
     for _ in range(3):
         video_k = min(int(limit_bits * factor / length / 1000) - audio_k, 20000)
         if video_k < 150:
-            raise RuntimeError("Clip ist zu lang für das Discord-Limit – zuerst zuschneiden.")
+            raise RuntimeError("Clip is too long for the Discord limit. Trim it first.")
         height = 720 if video_k < 3500 else 1080 if video_k < 9000 else None
         vf = [f"scale=-2:'min({height},ih)'"] if height else []
         fps = ["-r", "60"] if video_k >= 2000 else ["-r", "30"]
@@ -406,7 +406,7 @@ def export_discord(clip: Clip, cfg: Config, start: float | None = None,
                "-movflags", "+faststart", str(dest)]
         r = _encode(cmd, video_k)
         if r.returncode != 0:
-            raise RuntimeError(r.stderr.strip()[-400:] or "ffmpeg fehlgeschlagen")
+            raise RuntimeError(r.stderr.strip()[-400:] or "ffmpeg failed")
         if dest.stat().st_size <= cfg.discord_limit_mb * 1024 * 1024:
             return dest
         factor *= 0.85
@@ -414,7 +414,7 @@ def export_discord(clip: Clip, cfg: Config, start: float | None = None,
 
 
 def copy_files_to_clipboard(paths: list[Path]) -> bool:
-    """Datei(en) als Datei in die Zwischenablage – Strg+V in Discord hängt sie an."""
+    """Put file(s) on the clipboard as files; Ctrl+V in Discord attaches them."""
     uris = "\r\n".join(p.resolve().as_uri() for p in paths) + "\r\n"
     try:
         subprocess.Popen(["wl-copy", "--type", "text/uri-list"], stdin=subprocess.PIPE,

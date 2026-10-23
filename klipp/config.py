@@ -1,4 +1,4 @@
-"""Einstellungen und Pfade."""
+"""Settings and paths."""
 import os
 import tomllib
 from dataclasses import asdict, dataclass, fields
@@ -30,7 +30,7 @@ def state_path() -> Path:
     return runtime_dir() / "state.json"
 
 
-# Felder, deren Änderung einen Neustart des Recorders braucht
+# Fields whose change requires a recorder restart
 RECORDER_KEYS = ("clip_seconds", "fps", "quality", "codec", "monitor",
                  "desktop_audio", "microphone", "cursor")
 
@@ -45,7 +45,7 @@ class Config:
     desktop_audio: bool = True
     microphone: bool = False
     cursor: bool = True
-    hotkey: str = "ALT+F10"         # leer = kein Hotkey
+    hotkey: str = "ALT+F10"         # empty = no hotkey
     library: str = "~/Videos/Klipp"
     discord_limit_mb: int = 10
     notifications: bool = True
@@ -69,7 +69,7 @@ class Config:
 
     def save(self) -> None:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        lines = ["# Klipp – Einstellungen"]
+        lines = ["# Klipp settings"]
         for key, value in asdict(self).items():
             if isinstance(value, bool):
                 lines.append(f"{key} = {'true' if value else 'false'}")

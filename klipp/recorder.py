@@ -1,4 +1,4 @@
-"""Hintergrund-Recorder (gpu-screen-recorder im Replay-Modus) und Clip-Speichern."""
+"""Background recorder (gpu-screen-recorder in replay mode) and clip saving."""
 import json
 import os
 import shutil
@@ -18,7 +18,7 @@ WAYLAND_VARS = ("WAYLAND_DISPLAY", "DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE",
 SOUND = "/usr/share/sounds/freedesktop/stereo/camera-shutter.oga"
 
 
-# ---------------------------------------------------------------- IPC zu gsr
+# ---------------------------------------------------------------- IPC to gsr
 
 def ipc(name: str, data=None, timeout: float = 20.0) -> dict:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
@@ -57,18 +57,18 @@ def reload_daemon() -> bool:
         return False
 
 
-# ---------------------------------------------------------------- Speichern
+# ---------------------------------------------------------------- Saving
 
 def save_clip(seconds: int | None = None, notify: bool = True) -> Path:
     cfg = Config.load()
     win = library.active_window()
     game = library.detect_game(win)
     if not socket_path().exists():
-        raise RuntimeError("Instant Replay läuft nicht.")
+        raise RuntimeError("Instant replay is not running.")
     data = {"seconds": seconds} if seconds else None
     reply = ipc("save-replay", data)
     if reply.get("result") != "ok" or not reply.get("data"):
-        raise RuntimeError(f"Speichern fehlgeschlagen: {reply.get('data') or reply}")
+        raise RuntimeError(f"Saving failed: {reply.get('data') or reply}")
     clip = library.ingest(Path(reply["data"]), game, cfg)
     if notify:
         _announce(clip, game, cfg)
@@ -80,7 +80,7 @@ def _announce(clip: Path, game: str, cfg: Config) -> None:
         subprocess.Popen(["pw-play", SOUND], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
     if cfg.notifications and shutil.which("notify-send"):
-        # eigener Prozess wartet auf Klick, damit der Hotkey sofort zurückkehrt
+        # separate process waits for the click so the hotkey returns at once
         subprocess.Popen([sys.executable, "-m", "klipp", "_notify", str(clip), game],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          start_new_session=True, env=_pkg_env())
@@ -98,7 +98,7 @@ def notify_and_wait(clip: str, game: str) -> None:
     duration = library.read_index().get(clip, {}).get("duration")
     body = f"{game} · {round(duration)} s" if duration else game
     cmd = ["notify-send", "-a", "Klipp", "-i", str(thumb) if thumb.exists() else "camera-video",
-           "-A", "default=Ansehen", "--wait", "Clip gespeichert", body]
+           "-A", "default=View", "--wait", "Clip saved", body]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=600).stdout.strip()
     except subprocess.SubprocessError:
@@ -111,7 +111,7 @@ def notify_and_wait(clip: str, game: str) -> None:
 # ---------------------------------------------------------------- Daemon
 
 def _adopt_session_env() -> bool:
-    """Unter systemd fehlt die Wayland-Umgebung, bis Hyprland sie importiert hat."""
+    """Under systemd the Wayland environment is missing until Hyprland imports it."""
     if os.environ.get("WAYLAND_DISPLAY"):
         return True
     try:
@@ -176,7 +176,7 @@ def run_daemon() -> int:
         nonlocal stop
         stop = True
         if child and child.poll() is None:
-            child.send_signal(signal.SIGINT)  # im Replay-Modus: beenden ohne Speichern
+            child.send_signal(signal.SIGINT)  # in replay mode: quit without saving
 
     def on_hup(*_):
         nonlocal reload
@@ -189,8 +189,8 @@ def run_daemon() -> int:
     signal.signal(signal.SIGHUP, on_hup)
 
     if not shutil.which(GSR):
-        _write_state(recording=False, error="gpu-screen-recorder ist nicht installiert")
-        print("klipp: gpu-screen-recorder fehlt", file=sys.stderr)
+        _write_state(recording=False, error="gpu-screen-recorder is not installed")
+        print("klipp: gpu-screen-recorder missing", file=sys.stderr)
         return 1
 
     from .hotkey import HotkeyManager
@@ -200,7 +200,7 @@ def run_daemon() -> int:
     backoff = 2.0
     while not stop:
         if not _adopt_session_env():
-            _write_state(recording=False, error="Warte auf Wayland-Sitzung …")
+            _write_state(recording=False, error="Waiting for the Wayland session …")
             time.sleep(2)
             continue
         cfg = Config.load()
@@ -208,7 +208,7 @@ def run_daemon() -> int:
         incoming.mkdir(parents=True, exist_ok=True)
         socket_path().unlink(missing_ok=True)
         cmd = build_command(cfg, incoming)
-        print("klipp: starte", " ".join(cmd), flush=True)
+        print("klipp: starting", " ".join(cmd), flush=True)
         started = time.time()
         child = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         _write_state(recording=True, since=started, seconds=cfg.clip_seconds,
@@ -222,8 +222,8 @@ def run_daemon() -> int:
             reload = False
             backoff = 2.0
             continue
-        msg = (err or "").strip().splitlines()[-1:] or [f"Exit-Code {code}"]
-        print(f"klipp: Recorder beendet ({code}): {msg[0]}", file=sys.stderr, flush=True)
+        msg = (err or "").strip().splitlines()[-1:] or [f"exit code {code}"]
+        print(f"klipp: recorder exited ({code}): {msg[0]}", file=sys.stderr, flush=True)
         _write_state(recording=False, error=msg[0])
         backoff = 2.0 if time.time() - started > 60 else min(backoff * 2, 30)
         deadline = time.time() + backoff

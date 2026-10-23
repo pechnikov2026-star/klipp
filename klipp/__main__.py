@@ -1,11 +1,11 @@
-"""klipp – Kommandozeile.
+"""klipp - command line.
 
-  klipp                 Bibliothek öffnen
-  klipp save [SEK]      Clip speichern (für den Hotkey)
-  klipp status          Zeigt, ob Instant Replay läuft
-  klipp start|stop      Instant Replay starten/stoppen
-  klipp daemon          Recorder im Vordergrund (für systemd)
-  klipp open DATEI      Clip in der Bibliothek öffnen
+  klipp                 Open the library
+  klipp save [SEC]      Save a clip (for the hotkey)
+  klipp status          Show whether instant replay is running
+  klipp start|stop      Start/stop instant replay
+  klipp daemon          Run the recorder in the foreground (for systemd)
+  klipp open FILE       Open a clip in the library
 """
 import subprocess
 import sys
@@ -35,9 +35,9 @@ def main(argv: list[str] | None = None) -> int:
         seconds = int(argv[1]) if len(argv) > 1 and argv[1].isdigit() else None
         try:
             path = save_clip(seconds)
-        except Exception as e:  # noqa: BLE001 – Fehler als Notification zeigen
+        except Exception as e:  # noqa: BLE001 - show errors as a notification
             subprocess.run(["notify-send", "-a", "Klipp", "-u", "critical",
-                            "Clip nicht gespeichert", str(e)])
+                            "Clip not saved", str(e)])
             print(f"klipp: {e}", file=sys.stderr)
             return 1
         print(path)
@@ -46,10 +46,10 @@ def main(argv: list[str] | None = None) -> int:
         from .recorder import read_state
         st = read_state()
         if st.get("running"):
-            print(f"Instant Replay läuft · {st.get('monitor')} · {st.get('fps')} FPS · "
-                  f"letzte {st.get('seconds')} s")
+            print(f"Instant replay running · {st.get('monitor')} · {st.get('fps')} FPS · "
+                  f"last {st.get('seconds')} s")
             return 0
-        print("Instant Replay aus" + (f" – {st['error']}" if st.get("error") else ""))
+        print("Instant replay off" + (f" - {st['error']}" if st.get("error") else ""))
         return 3
     if cmd in ("start", "stop", "restart"):
         return _service(cmd)
@@ -60,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     if cmd in ("gui", "open"):
         from .gui import run
         return run(argv[1:] if cmd == "open" else [])
-    print(f"klipp: unbekannter Befehl '{cmd}'\n\n{__doc__.strip()}", file=sys.stderr)
+    print(f"klipp: unknown command '{cmd}'\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 
 

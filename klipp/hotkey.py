@@ -1,10 +1,10 @@
-"""Globaler Hotkey – von Klipp selbst verwaltet.
+"""Global hotkey, managed by Klipp itself.
 
-Primär: Laufzeit-Bind in Hyprland (`hyprctl keyword bind`), kein Config-Eintrag nötig.
-Hyprland verwirft Laufzeit-Binds bei `hyprctl reload`, deshalb prüft der Daemon
-regelmässig und setzt ihn neu.
-Fallback (andere Compositoren / Bind abgelehnt): Tastatur direkt über /dev/input
-lesen – braucht Lesezugriff (Gruppe `input`).
+Primary: a runtime bind in Hyprland (`hyprctl keyword bind`), no config entry needed.
+Hyprland drops runtime binds on `hyprctl reload`, so the daemon checks regularly
+and binds it again.
+Fallback (other compositors / bind rejected): read the keyboard directly from
+/dev/input, which needs read access (group `input`).
 """
 import glob
 import json
@@ -26,7 +26,7 @@ MOD_MASK = {"SHIFT": 1, "CTRL": 4, "ALT": 8, "SUPER": 64}
 # ---------------------------------------------------------------- Format
 
 def parse(combo: str) -> tuple[list[str], str] | None:
-    """'ALT+F10' -> (['ALT'], 'F10'); leer/ungültig -> None."""
+    """'ALT+F10' -> (['ALT'], 'F10'); empty/invalid -> None."""
     parts = [p.strip() for p in combo.split("+") if p.strip()]
     if not parts:
         return None
@@ -39,8 +39,8 @@ def parse(combo: str) -> tuple[list[str], str] | None:
 def pretty(combo: str) -> str:
     p = parse(combo)
     if not p:
-        return "Kein Hotkey"
-    names = {"SUPER": "Super", "CTRL": "Strg", "ALT": "Alt", "SHIFT": "Shift"}
+        return "No hotkey"
+    names = {"SUPER": "Super", "CTRL": "Ctrl", "ALT": "Alt", "SHIFT": "Shift"}
     key = p[1] if len(p[1]) > 1 else p[1].upper()
     return " + ".join([names[m] for m in p[0]] + [key])
 
@@ -96,7 +96,7 @@ def hypr_unbind(combo: str) -> None:
 
 
 def hypr_conflict(combo: str) -> str | None:
-    """Beschreibung eines fremden Binds auf derselben Kombination, sonst None."""
+    """Description of another bind on the same combination, else None."""
     p = parse(combo)
     if not p or not hyprland_available():
         return None
@@ -112,11 +112,11 @@ def hypr_conflict(combo: str) -> str | None:
     return None
 
 
-# ---------------------------------------------------------------- evdev-Fallback
+# ---------------------------------------------------------------- evdev fallback
 
 EVENT = struct.Struct("llHHi")
 EV_KEY = 1
-# Linux-Keycodes der Modifier und einer Auswahl an Tasten (xkb-Name -> Code)
+# Linux keycodes of the modifiers and a selection of keys (xkb name -> code)
 MOD_CODES = {29: "CTRL", 97: "CTRL", 56: "ALT", 100: "ALT", 42: "SHIFT", 54: "SHIFT",
              125: "SUPER", 126: "SUPER"}
 KEY_CODES = {**{f"F{i}": c for i, c in zip(range(1, 11), range(59, 69))},
@@ -187,10 +187,10 @@ class EvdevListener:
                     self.on_press()
 
 
-# ---------------------------------------------------------------- Daemon-Thread
+# ---------------------------------------------------------------- Daemon thread
 
 class HotkeyManager(threading.Thread):
-    """Hält den Hotkey aus der Config aktiv und meldet den Zustand."""
+    """Keeps the configured hotkey active and reports its state."""
 
     def __init__(self, report):
         super().__init__(daemon=True)
@@ -230,7 +230,7 @@ class HotkeyManager(threading.Thread):
                     self.report("evdev", None)
                     return
             self.mode = None
-            self.report(None, "Hotkey konnte nicht gesetzt werden")
+            self.report(None, "Could not set the hotkey")
 
     def _fire(self):
         from .recorder import _pkg_env

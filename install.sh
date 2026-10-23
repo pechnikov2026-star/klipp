@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Klipp installieren (Arch Linux, pro Benutzer, ohne root ausser für Pakete)
-#   ./install.sh            installieren / aktualisieren
-#   ./install.sh --remove   deinstallieren (Clips bleiben erhalten)
+# Install Klipp (Arch Linux, per user, root only for packages)
+#   ./install.sh            install / update
+#   ./install.sh --remove   uninstall (clips are kept)
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,21 +19,21 @@ if [[ "${1:-}" == "--remove" ]]; then
   systemctl --user disable --now klipp.service 2>/dev/null || true
   rm -rf "$LIB" "$BIN" "$UNIT" "$APPS/dev.klipp.Klipp.desktop" "$ICONS/dev.klipp.Klipp.svg"
   systemctl --user daemon-reload
-  say "Klipp entfernt. Clips und Einstellungen liegen weiter in ~/Videos/Klipp und ~/.config/klipp."
+  say "Klipp removed. Your clips and settings are still in ~/Videos/Klipp and ~/.config/klipp."
   exit 0
 fi
 
 missing=()
 for p in "${DEPS[@]}"; do pacman -Qq "$p" &>/dev/null || missing+=("$p"); done
 if ((${#missing[@]})); then
-  say "Fehlende Pakete: ${missing[*]}"
+  say "Missing packages: ${missing[*]}"
   if ! sudo pacman -S --needed --noconfirm "${missing[@]}"; then
-    echo "Pakete konnten nicht installiert werden. Erst 'sudo pacman -Syu' laufen lassen, dann nochmal." >&2
+    echo "Could not install the packages. Run 'sudo pacman -Syu' first, then try again." >&2
     exit 1
   fi
 fi
 
-say "Kopiere Programm nach $LIB"
+say "Copying Klipp to $LIB"
 rm -rf "$LIB"
 mkdir -p "$LIB" "$(dirname "$BIN")" "$APPS" "$ICONS" "$(dirname "$UNIT")"
 cp -r "$SRC/klipp" "$LIB/"
@@ -53,11 +53,11 @@ install -m644 "$SRC/data/klipp.service" "$UNIT"
 update-desktop-database "$APPS" &>/dev/null || true
 gtk-update-icon-cache -q "$HOME/.local/share/icons/hicolor" &>/dev/null || true
 
-say "Starte Instant Replay (startet ab jetzt automatisch beim Login)"
+say "Starting instant replay (it now starts automatically at login)"
 systemctl --user daemon-reload
 systemctl --user enable klipp.service &>/dev/null
 systemctl --user restart klipp.service
 
 sleep 2
 "$BIN" status || true
-say "Fertig. Klipp im App-Launcher öffnen – im Spiel Alt+F10 drücken (Hotkey in den Einstellungen änderbar)."
+say "Done. Open Klipp from your app launcher and press Alt+F10 in a game (you can change the hotkey in the settings)."
