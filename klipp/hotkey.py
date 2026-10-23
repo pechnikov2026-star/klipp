@@ -182,7 +182,8 @@ class EvdevListener:
                     continue
                 if code in MOD_CODES:
                     (self.held.add if value else self.held.discard)(MOD_CODES[code])
-                elif code == self.code and value == 1 and self.held == self.mods:
+                elif (code == self.code and value == 1 and self.held == self.mods
+                      and not self.stop.is_set()):
                     self.on_press()
 
 

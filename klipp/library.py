@@ -209,9 +209,9 @@ def has_encoder(name: str) -> bool:
     return f" {name} " in out
 
 
-def _encoder_args(bitrate_k: int | None = None) -> list[str]:
+def _encoder_args(bitrate_k: int | None = None, hw: bool = True) -> list[str]:
     """H.264 per NVENC wenn möglich, sonst x264."""
-    if has_encoder("h264_nvenc"):
+    if hw and has_encoder("h264_nvenc"):
         if bitrate_k:
             return ["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "cbr",
                     "-b:v", f"{bitrate_k}k", "-maxrate", f"{bitrate_k}k",
@@ -221,6 +221,17 @@ def _encoder_args(bitrate_k: int | None = None) -> list[str]:
         return ["-c:v", "libx264", "-preset", "veryfast", "-b:v", f"{bitrate_k}k",
                 "-maxrate", f"{bitrate_k}k", "-bufsize", f"{bitrate_k * 2}k"]
     return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18"]
+
+
+def _encode(cmd: list[str], bitrate_k: int | None = None) -> subprocess.CompletedProcess:
+    i = cmd.index("ENC")
+    r = None
+    for hw in (True, False):
+        args = _encoder_args(bitrate_k, hw)
+        r = subprocess.run(cmd[:i] + args + cmd[i + 1:], capture_output=True, text=True)
+        if r.returncode == 0 or "h264_nvenc" not in args:
+            break
+    return r
 
 
 def _unique(path: Path) -> Path:
@@ -353,9 +364,9 @@ def trim(clip: Clip, start: float, end: float) -> Path:
     """Bildgenau zuschneiden (neu kodiert), Original bleibt erhalten."""
     dest = _unique(clip.path.with_name(f"{clip.path.stem} (Schnitt){clip.path.suffix}"))
     cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
-           "-i", str(clip.path), *_encoder_args(), "-c:a", "aac", "-b:a", "192k",
+           "-i", str(clip.path), "ENC", "-c:a", "aac", "-b:a", "192k",
            "-movflags", "+faststart", str(dest)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = _encode(cmd)
     if r.returncode != 0:
         dest.unlink(missing_ok=True)
         raise RuntimeError(r.stderr.strip()[-400:] or "ffmpeg fehlgeschlagen")
@@ -391,9 +402,9 @@ def export_discord(clip: Clip, cfg: Config, start: float | None = None,
         fps = ["-r", "60"] if video_k >= 2000 else ["-r", "30"]
         cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
                "-i", str(clip.path), *(["-vf", ",".join(vf)] if vf else []), *fps,
-               *_encoder_args(video_k), "-c:a", "aac", "-b:a", f"{audio_k}k",
+               "ENC", "-c:a", "aac", "-b:a", f"{audio_k}k",
                "-movflags", "+faststart", str(dest)]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = _encode(cmd, video_k)
         if r.returncode != 0:
             raise RuntimeError(r.stderr.strip()[-400:] or "ffmpeg fehlgeschlagen")
         if dest.stat().st_size <= cfg.discord_limit_mb * 1024 * 1024:

@@ -1343,6 +1343,8 @@ class KlippWindow(Adw.ApplicationWindow):
             if c.clip.path == path:
                 self.open_clip(c.clip)
                 return
+        if path.is_file():
+            self.open_clip(library.Clip(path, path.parent.name, path.stat().st_mtime))
 
     def _focus_search(self, *_):
         self.search.grab_focus()

@@ -63,7 +63,7 @@ class Config:
         except (FileNotFoundError, tomllib.TOMLDecodeError):
             return cfg
         for f in fields(cls):
-            if f.name in data and isinstance(data[f.name], type(getattr(cfg, f.name))):
+            if f.name in data and type(data[f.name]) is type(getattr(cfg, f.name)):
                 setattr(cfg, f.name, data[f.name])
         return cfg
 
